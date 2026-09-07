@@ -1,0 +1,48 @@
+{
+  "name": "@xwlib/browser-genie",
+  "version": "0.1.0",
+  "description": "Ready-to-use browser genie with host-provided model, browser, storage and policy.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/babecuer/elf.git"
+  },
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./dist/index.mjs"
+    },
+    "./stagehand": {
+      "types": "./types/stagehand.d.ts",
+      "import": "./dist/stagehand.mjs"
+    },
+    "./storage/sqlite": {
+      "types": "./types/storage-sqlite.d.ts",
+      "import": "./dist/storage/sqlite.mjs"
+    },
+    "./wiki/sqlite": {
+      "types": "./types/wiki-sqlite.d.ts",
+      "import": "./dist/wiki/sqlite.mjs"
+    },
+    "./node": {
+      "types": "./types/node.d.ts",
+      "import": "./dist/node.mjs"
+    }
+  },
+  "files": [
+    "dist",
+    "types",
+    "docs",
+    "README.md"
+  ],
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@browserbasehq/stagehand": "^4.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
