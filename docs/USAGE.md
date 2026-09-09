@@ -93,6 +93,14 @@ await elf.run(text, context, {
 
 Use public progress messages to update one pending assistant response. Do not expose hidden reasoning or append a new chat message for every execution stage.
 
+## 5. Understand task runtime ownership
+
+When `agentRuntime` is configured, one `elf.run()` call creates one fresh task session. ELF retrieves relevant workflows, knowledge, stable skills, and formal memory, then gives the host runtime a task-scoped prompt and governed `executeTool()` function. Corrective turns inside that task reuse the same session ID; a later user request receives a different ID.
+
+The host runtime owns continuous reasoning and final response generation. ELF owns capability checks, tool execution, browser scope, limits, validation, and learning. Stagehand remains behind the browser adapter and does not replace the task-level agent runtime.
+
+Real response text can stream through `onDelta`; ELF emits it as `agent.reply.delta`. Progress events update task state, but they are not synthetic response tokens.
+
 ## 6. Teach and search knowledge
 
 Save knowledge explicitly provided by a user:
@@ -168,39 +176,81 @@ knowledgeSources: [
 
 A provider may be an array, `{ entries }`, an async search function, or an object with `search()` and optional `close()` methods.
 
-Knowledge describes facts and procedures. It cannot add capabilities, expand allowed origins, lower risk, or bypass confirmation.
+Knowledge describes facts and procedures. It cannot add capabilities, expand allowed origins, lower risk, or bypass host policy.
 
-## 8. Store and browse memory
+## 8. Store chat archives, work logs, and formal memory
+
+These are separate stores with different purposes. Chat archives are user-visible history and work logs are execution records; neither is recalled into later model turns.
+
+Archive chat messages:
 
 ```js
-await elf.remember({
-  kind: 'chat',
+await elf.archiveChatMessage({
   role: 'assistant',
   content: 'The requested task was completed.',
-  dateKey: '2026-09-07',
+  sessionId,
 })
 
-const recent = elf.listMemories({
-  kind: 'chat',
-  limit: 20,
+const chatPage = elf.browseChatArchive({ offset: 0, limit: 30 })
+```
+
+Append and browse work logs:
+
+```js
+await elf.appendWorkLog({
+  task: 'Inspect the requested page',
+  result: 'The visible state was verified.',
+  status: 'completed',
+  url: 'https://app.example.com/items/1',
 })
 
-const page = elf.browseMemories({
-  kind: 'work',
-  dateKey: '2026-09-07',
+const workPage = elf.browseWorkLogs({ status: 'completed', offset: 0, limit: 30 })
+```
+
+Create and govern durable formal memory only for stable collaboration preferences, goals, decisions, entities, commitments, and constraints:
+
+```js
+const memory = await elf.proposeMemory({
+  kind: 'preference',
+  statement: 'Lead status reports with the outcome.',
+  origin: 'user-explicit',
+  status: 'active',
+  triggerTerms: ['status report', 'progress update'],
+  importance: 7,
+})
+
+const memoryPage = elf.browseMemoryItems({
+  status: 'active',
   offset: 0,
   limit: 30,
 })
 
-const matches = await elf.searchMemories('completed task', {
-  kind: 'work',
-  limit: 10,
-})
+const recalled = await elf.searchActiveMemories('How should I format this update?', context, { limit: 3 })
+
+await elf.setMemoryStatus(memory.id, 'superseded')
+await elf.forgetMemory(memory.id)
 ```
 
-Memory is separate from host knowledge and learned skills.
+The legacy `remember()`, `listMemories()`, `browseMemories()`, and `searchMemories()` methods exist only for migration of older mixed `chat`/`work` data. New integrations should not use them.
 
-## 9. Manage tasks, schedules, and deliverables
+## 9. Manage user workflows
+
+Save user-authored workflows and browse or match them independently from knowledge:
+
+```js
+const workflow = await elf.saveUserWorkflow({
+  name: 'Review then update',
+  description: 'Inspect the current record, verify its visible state, apply the requested update, then validate the saved result.',
+  enabled: true,
+})
+
+const page = elf.browseUserWorkflows({ query: 'review', offset: 0, limit: 30 })
+const matches = await elf.matchUserWorkflows('Review and update this record', context, { limit: 3 })
+```
+
+Host-shipped presets should use `syncPresetWorkflows()`. Preset copies can be reset, recoverably removed, and restored; manually created workflows are permanently removed.
+
+## 10. Manage tasks, schedules, and deliverables
 
 Create or update a work item:
 
@@ -241,9 +291,9 @@ Remove a work item:
 await elf.removeWorkItem(item.id)
 ```
 
-The host should request the required user confirmation before destructive actions.
+The host must apply its own authorization and user-interaction flow for destructive actions through trusted policy and UI boundaries.
 
-## 10. Use structured data tables
+## 11. Use structured data tables
 
 The `data` capability must be declared before using dynamic business tables.
 
@@ -298,7 +348,7 @@ const result = await elf.collectData(
 )
 ```
 
-## 11. Register and invoke plugins
+## 12. Register and invoke plugins
 
 ```js
 elf.registerPlugin({
@@ -324,7 +374,7 @@ await elf.unregisterPlugin('host-export')
 
 An extension plugin can run only when its `capabilityId` exactly matches a declared `extension` capability and host policy authorizes the invocation.
 
-## 12. Use a custom browser adapter
+## 13. Use a custom browser adapter
 
 When Stagehand is not used, provide `observe`, `act`, and `extract`:
 
@@ -342,7 +392,7 @@ const elf = createElf({
 
 Selectors and XPath mappings should remain inside the trusted adapter. Model-facing observations should use short semantic element identifiers and bounded visible-page context.
 
-## 13. Close the instance
+## 14. Close the instance
 
 ```js
 await elf.close()

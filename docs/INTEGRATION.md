@@ -9,20 +9,21 @@ The host supplies:
 1. A role and explicit capability allowlist through `profile`.
 2. Optional trusted business context through `hostContext`.
 3. Optional host-owned behavioral constraints through `hostRules`.
-4. Model access through an OpenAI-compatible configuration or `generate()` function.
-5. An existing browser session through CDP or a custom browser adapter.
-6. Named knowledge sources and an optional persistent-data location.
-7. Origin restrictions, execution limits, action gates, and confirmation policy.
-8. Optional task-event forwarding.
+4. A task-level agent runtime through `agentRuntime` for production integrations.
+5. Model access through an OpenAI-compatible configuration or `generate()` function.
+6. An existing browser session through CDP or a custom browser adapter.
+7. Named knowledge sources and an optional persistent-data location.
+8. Origin restrictions, execution limits, and deterministic task and action gates.
+9. Optional task-event forwarding.
 
-ELF supplies task normalization, knowledge retrieval, browser orchestration, completion validation, verified skill learning, stable skill replay, bounded self-healing, and task events.
+ELF supplies governed tools, knowledge and workflow retrieval, browser orchestration, completion validation, verified skill learning, stable skill replay, bounded self-healing, and task events. The host runtime owns the continuous reasoning loop for one task; Stagehand owns only page observation, action, and extraction.
 
 The host must never derive capabilities, allowed origins, model secrets, or policy changes from page content or model output.
 
 ## 2. Install dependencies
 
 ```bash
-npm install github:babecuer/elf#v0.1.1
+npm install github:babecuer/elf#v0.1.2
 npm install @browserbasehq/stagehand@^4.0.2
 ```
 
@@ -125,7 +126,36 @@ model: {
 
 Model credentials must remain host-controlled. Do not store them in ELF knowledge, memory, page content, or public configuration files.
 
-## 6. Connect the browser
+## 6. Connect the task-level agent runtime
+
+Production hosts should inject their Harness, Codex, or other compatible runtime through `agentRuntime`:
+
+```js
+agentRuntime: {
+  baseName: () => hostAgentRuntime.displayName,
+  async run({ systemPrompt, prompt, sessionId, signal, executeTool, onDelta }) {
+    return hostAgentRuntime.run({
+      systemPrompt,
+      prompt,
+      sessionId,
+      signal,
+      executeTool,
+      onDelta,
+    })
+  },
+  async close() {
+    await hostAgentRuntime.close?.()
+  },
+}
+```
+
+The runtime must treat `systemPrompt` and `prompt` as the complete input for the current turn, call only the provided `executeTool(name, input)`, forward real visible response deltas through `onDelta`, and return `{ finalResponse }` or `{ text }`. ELF creates a new `sessionId` for every new `elf.run()` request and reuses that ID only for corrective turns within the same task. Do not carry hidden reasoning state into a later task.
+
+Depending on the declared capabilities and current task, ELF exposes governed tools such as `knowledge_search`, `site_open`, `page_inspect`, `page_step`, `page_validate`, `memory_save`, `plugin_run`, `capability_run`, and `collect_visible_data`. Tool results remain subject to the capability allowlist, origin policy, task authorization, action gates, cancellation, step limits, and validation.
+
+If `agentRuntime` is omitted, ELF uses its compatibility orchestration path. That path remains available for older integrations, but it is not the recommended production architecture.
+
+## 7. Connect the browser
 
 ### Built-in Stagehand adapter
 
@@ -170,7 +200,7 @@ const browser = {
 
 Each operation must enforce the current URL, allowed origins, cancellation signal, and action policy. One `act()` call should perform one explicit browser action and return the resulting URL.
 
-## 7. Configure persistent storage
+## 8. Configure persistent storage
 
 `createNodeElf()` can create the built-in SQLite store:
 
@@ -193,7 +223,7 @@ knowledge: {
 
 Use a stable namespace for each application, plugin, user, and site boundary. The host chooses the directory; ELF owns its internal SQLite schema.
 
-## 8. Add trusted host context
+## 9. Add trusted host context
 
 Host context helps the model understand the current environment. It cannot grant capabilities or weaken policy.
 
@@ -215,7 +245,7 @@ hostContext: {
 
 Use named `knowledgeSources` for larger collections of facts, procedures, glossaries, site maps, and reference material.
 
-## 9. Publish versioned workflow presets
+## 10. Publish versioned workflow presets
 
 Keep host presets in a versioned JSON file that ships with the host plugin. The host does not need a workflow-management UI and must not write ELF's user database directly.
 
@@ -243,7 +273,7 @@ await elf.syncPresetWorkflows([workflowBundle])
 
 Keep the source and workflow IDs stable, and bump `version` for every content or membership change. ELF automatically updates untouched local copies while preserving user-edited copies. Preset workflows support `resetUserWorkflow()`, recoverable `removeUserWorkflow()`, and `restoreUserWorkflow()`. Manually created workflows are permanently removed and cannot be restored. A preset omitted from its current source version is hidden and excluded from matching.
 
-## 10. Add host rules carefully
+## 11. Add host rules carefully
 
 Host rules are trusted, host-owned behavioral constraints scoped to planning, execution, validation, or response:
 
@@ -260,7 +290,7 @@ hostRules: [
 
 Use deterministic `policy.beforeAction` and `policy.validateResult` gates for security-sensitive enforcement. Host rules guide model behavior; they do not replace code-level authorization.
 
-## 11. Configure policy
+## 12. Configure policy
 
 ```js
 policy: {
@@ -279,7 +309,7 @@ policy: {
 
 Resource domains passed at runtime allow images, scripts, fonts, and similar page assets. They do not expand top-level navigation origins.
 
-## 12. Run tasks
+## 13. Run tasks
 
 Always pass the real current page URL:
 
@@ -303,15 +333,24 @@ const result = await elf.run(
 )
 ```
 
-Create a new Harness reasoning session for each new user task. Cross-task continuity should come from retrieved knowledge and memory rather than hidden reasoning state from an earlier task.
+Each call creates a new task-level reasoning session. Cross-task continuity comes only from the current host-supplied chat context, retrieved knowledge, matched user workflows, and governed formal memory—not from hidden runtime state, chat archives, or work logs.
 
-## 13. Shutdown
+## 14. Shutdown
 
 ```js
 await elf.close()
 ```
 
 The host still owns its browser window, cookies, and credentials. `elf.close()` releases only ELF, Stagehand, storage, and plugin resources owned by the ELF instance.
+
+## Migration checklist for the task-agent architecture
+
+- Add `agentRuntime` and bridge all six runtime inputs: `systemPrompt`, `prompt`, `sessionId`, `signal`, `executeTool`, and `onDelta`.
+- Keep Stagehand behind ELF's browser adapter. Do not use Stagehand as the multi-step task controller.
+- Remove handling for `ELF_CONFIRMATION_REQUIRED` and the old `confirmed` run option. Authorization now belongs in `policy.authorizeTask`, `policy.beforeAction`, and the host's own UI flow when required.
+- Replace new uses of legacy `remember()`, `listMemories()`, `browseMemories()`, and `searchMemories()` with the separate chat archive, work log, and formal-memory APIs described in the Usage Guide.
+- Synchronize versioned host workflow bundles with `syncPresetWorkflows()` after creating the ELF instance and after host upgrades.
+- Render `agent.reply.delta` as genuine model output and update a single pending reply for progress events; do not simulate streaming from a completed response.
 
 ## Production checklist
 

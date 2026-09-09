@@ -7,8 +7,9 @@ The host application remains in control of the browser session, model credential
 ## Highlights
 
 - Natural-language task execution in an existing Chromium or Electron session
+- Host-provided task-level agent runtime with fresh reasoning isolation per request
 - Explicit host-defined roles and capability allowlists
-- Origin restrictions, step limits, action gates, and confirmation handling
+- Origin restrictions, step limits, and deterministic task and action gates
 - Page observation and action through Stagehand or a custom browser adapter
 - Verified skill learning with bounded self-healing
 - Named knowledge sources, human-taught knowledge, memory, work items, and structured data
@@ -28,7 +29,7 @@ The host application remains in control of the browser session, model credential
 Install a pinned public GitHub release:
 
 ```bash
-npm install github:babecuer/elf#v0.1.1
+npm install github:babecuer/elf#v0.1.2
 ```
 
 Install the Stagehand peer dependency when using the standard browser adapter:
@@ -71,6 +72,16 @@ const elf = createNodeElf({
     model: readModelConfiguration().model,
   }),
 
+  agentRuntime: {
+    baseName: () => hostAgentRuntime.displayName,
+    run(input) {
+      return hostAgentRuntime.run(input)
+    },
+    close() {
+      return hostAgentRuntime.close?.()
+    },
+  },
+
   browser: {
     cdpPort: browserSession.cdpPort,
     stagehandApi: { localBrowser, Stagehand },
@@ -109,18 +120,18 @@ const result = await elf.run(
 await elf.close()
 ```
 
-Values such as `browserSession`, `applicationDataDirectory`, `currentUserId`, `browserView`, and `renderElfEvent` are supplied by the host application.
+Values such as `hostAgentRuntime`, `browserSession`, `applicationDataDirectory`, `currentUserId`, `browserView`, and `renderElfEvent` are supplied by the host application. ELF creates a fresh task session for every `elf.run()` call and exposes only its governed tools to the host runtime; Stagehand remains the page observation and action engine rather than the task controller.
 
 ## Documentation
 
 - [Integration guide](./docs/INTEGRATION.md) — architecture boundaries, configuration, browser adapters, storage, and production checklist
-- [Usage guide](./docs/USAGE.md) — task execution, confirmations, events, knowledge, memory, work items, data, plugins, and API entry points
+- [Usage guide](./docs/USAGE.md) — task execution, agent-runtime behavior, events, knowledge, memory, workflows, work items, data, plugins, and API entry points
 
 ## Package entry points
 
 | Entry point | Purpose |
 | --- | --- |
-| `@xwlib/browser-genie` | Core runtime and `createElf()` |
+| `@xwlib/browser-genie` | `createElf()` and lower-level composition APIs |
 | `@xwlib/browser-genie/node` | Recommended Node.js/Electron setup with SQLite persistence |
 | `@xwlib/browser-genie/stagehand` | Stagehand browser adapter and viewport compaction helpers |
 | `@xwlib/browser-genie/storage/sqlite` | SQLite skill, knowledge, memory, work-item, and data storage |
