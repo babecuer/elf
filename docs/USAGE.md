@@ -176,6 +176,39 @@ knowledgeSources: [
 
 A provider may be an array, `{ entries }`, an async search function, or an object with `search()` and optional `close()` methods.
 
+Use `mode: 'shared'` when the provider queries a central knowledge service rather than a bundle shipped with the host. Shared providers must implement `search()` and may implement `browse()`, `list()`, and `submitImprovement()`:
+
+```js
+knowledgeSources: [{
+  id: 'shared-reference',
+  name: 'Shared reference',
+  owner: 'host',
+  category: 'reference',
+  mode: 'shared',
+  readonly: true,
+  provider: {
+    search: (request) => knowledgeService.search(request),
+    browse: (request) => knowledgeService.browse(request),
+    submitImprovement: (request) => knowledgeService.createProposal(request),
+  },
+}]
+```
+
+`readonly` still prevents direct editing of authoritative entries. `submitImprovement()` creates a governed proposal; it does not imply direct overwrite permission. Submit one through ELF with the source version or content hash used as the proposal baseline:
+
+```js
+await elf.submitKnowledgeImprovement('shared-reference', {
+  operation: 'update',
+  targetId: 'existing-entry',
+  baseVersion: '12',
+  reason: 'The verified page now describes a different workflow.',
+  proposedEntry: { content: 'Use the newly verified workflow.' },
+  evidence: [{ url: currentUrl, observedAt: new Date().toISOString() }],
+}, context)
+```
+
+The host may gate proposals with `policy.authorizeKnowledgeImprovement`. Central review, conflict handling, persistence, and publication remain host responsibilities.
+
 Knowledge describes facts and procedures. It cannot add capabilities, expand allowed origins, lower risk, or bypass host policy.
 
 ## 8. Store chat archives, work logs, and formal memory

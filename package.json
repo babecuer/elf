@@ -1,6 +1,6 @@
 {
   "name": "@xwlib/browser-genie",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Ready-to-use browser genie with host-provided model, browser, storage and policy.",
   "type": "module",
   "license": "UNLICENSED",

@@ -75,6 +75,7 @@ export type ElfPolicy = {
   allowSkillPersistence?(input: Record<string, unknown>): Promise<boolean | void> | boolean | void
   transformCandidate?(input: Record<string, unknown>): Promise<Record<string, unknown> | null | void> | Record<string, unknown> | null | void
   authorizeKnowledge?(input: Record<string, unknown>): Promise<boolean | void> | boolean | void
+  authorizeKnowledgeImprovement?(input: ElfKnowledgeImprovementRequest): Promise<boolean | void> | boolean | void
   authorizePlugin?(input: ElfPluginRunRequest): Promise<boolean | void> | boolean | void
 }
 
@@ -157,20 +158,71 @@ export type ElfHostKnowledge = {
   enabled?: boolean
 }
 
+export type ElfKnowledgeSearchInput = {
+  query: string
+  context: Record<string, unknown>
+  task: Record<string, unknown>
+  signal?: AbortSignal
+  limit: number
+}
+
+export type ElfKnowledgeBrowseInput = {
+  query?: string
+  offset?: number
+  limit?: number
+  includeDisabled?: boolean
+}
+
+export type ElfKnowledgeBrowseResult = {
+  items: ReadonlyArray<ElfHostKnowledge>
+  total: number
+  offset?: number
+  limit?: number
+  hasMore?: boolean
+}
+
+export type ElfKnowledgeImprovementProposal = {
+  operation?: 'create' | 'update' | 'deprecate'
+  targetId?: string
+  entryId?: string
+  baseVersion?: string
+  baseContentHash?: string
+  reason?: string
+  proposedEntry?: Partial<ElfHostKnowledge> & { content?: string }
+  evidence?: ReadonlyArray<unknown>
+}
+
+export type ElfKnowledgeImprovementRequest = {
+  source: ElfKnowledgeSourceInfo
+  proposal: ElfKnowledgeImprovementProposal
+  context: Record<string, unknown>
+}
+
+export type ElfDynamicKnowledgeProvider = {
+  search(input: ElfKnowledgeSearchInput): Promise<ReadonlyArray<ElfHostKnowledge>> | ReadonlyArray<ElfHostKnowledge>
+  browse?(input: ElfKnowledgeBrowseInput): Promise<ElfKnowledgeBrowseResult> | ElfKnowledgeBrowseResult
+  list?(input: ElfKnowledgeBrowseInput): Promise<ReadonlyArray<ElfHostKnowledge>> | ReadonlyArray<ElfHostKnowledge>
+  submitImprovement?(input: ElfKnowledgeImprovementRequest): Promise<unknown> | unknown
+  close?(): Promise<void> | void
+}
+
 export type ElfHostKnowledgeSource =
   | ReadonlyArray<ElfHostKnowledge>
   | { entries: ReadonlyArray<ElfHostKnowledge> }
-  | { search(input: { query: string; context: Record<string, unknown>; task: Record<string, unknown>; signal?: AbortSignal; limit: number }): Promise<ReadonlyArray<ElfHostKnowledge>> | ReadonlyArray<ElfHostKnowledge>; close?(): Promise<void> | void }
-  | ((input: { query: string; context: Record<string, unknown>; task: Record<string, unknown>; signal?: AbortSignal; limit: number }) => Promise<ReadonlyArray<ElfHostKnowledge>> | ReadonlyArray<ElfHostKnowledge>)
+  | ElfDynamicKnowledgeProvider
+  | ((input: ElfKnowledgeSearchInput) => Promise<ReadonlyArray<ElfHostKnowledge>> | ReadonlyArray<ElfHostKnowledge>)
 
 export type ElfKnowledgeSourceOwner = 'host' | 'human' | 'elf'
 export type ElfKnowledgeSourceCategory = 'site-map' | 'business' | 'reference' | 'policy' | 'manual' | 'page-learning' | 'skill-learning' | 'other'
+export type ElfKnowledgeSourceMode = 'bundled' | 'shared'
 
 export type ElfKnowledgeSource = {
   id: string
   name: string
   owner: ElfKnowledgeSourceOwner
   category: ElfKnowledgeSourceCategory
+  /** Distribution topology. Bundled sources ship with the host; shared sources query a dynamic provider. */
+  mode?: ElfKnowledgeSourceMode
   authority?: number
   readonly?: boolean
   version?: string
@@ -180,6 +232,7 @@ export type ElfKnowledgeSource = {
 
 export type ElfKnowledgeSourceInfo = Omit<ElfKnowledgeSource, 'provider'> & {
   statuses?: Record<string, number>
+  supportsImprovement?: boolean
 }
 
 export type ElfHostScenario = {
@@ -354,6 +407,7 @@ export function createElf(options: ElfOptions): {
   searchKnowledge(query: string, context?: Record<string, unknown>, options?: { limit?: number }): Promise<Array<Record<string, unknown> & { source?: 'host' | 'human' | 'elf' | 'manual'; sourceId?: string; sourceName?: string; sourceOwner?: ElfKnowledgeSourceOwner; sourceCategory?: ElfKnowledgeSourceCategory; sourceAuthority?: number; readonly?: boolean }>>
   listKnowledgeSources(): ElfKnowledgeSourceInfo[]
   browseKnowledgeSource(sourceId: string, options?: { query?: string; offset?: number; limit?: number; includeDisabled?: boolean }): Promise<{ sourceId: string; query: string; items: Array<Record<string, unknown>>; total: number; offset: number; limit: number; hasMore: boolean }>
+  submitKnowledgeImprovement(sourceId: string, input: ElfKnowledgeImprovementProposal, context?: Record<string, unknown>): Promise<unknown>
   listKnowledge(options?: { includeDisabled?: boolean }): Array<Record<string, unknown>>
   removeKnowledge(id: string): Promise<boolean>
   remember(input: ElfMemory): Promise<Record<string, unknown>>

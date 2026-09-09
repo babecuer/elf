@@ -29,7 +29,7 @@ The host application remains in control of the browser session, model credential
 Install a pinned public GitHub release:
 
 ```bash
-npm install github:babecuer/elf#v0.1.2
+npm install github:babecuer/elf#v0.1.3
 ```
 
 Install the Stagehand peer dependency when using the standard browser adapter:

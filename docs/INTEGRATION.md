@@ -23,7 +23,7 @@ The host must never derive capabilities, allowed origins, model secrets, or poli
 ## 2. Install dependencies
 
 ```bash
-npm install github:babecuer/elf#v0.1.2
+npm install github:babecuer/elf#v0.1.3
 npm install @browserbasehq/stagehand@^4.0.2
 ```
 
@@ -244,6 +244,8 @@ hostContext: {
 ```
 
 Use named `knowledgeSources` for larger collections of facts, procedures, glossaries, site maps, and reference material.
+
+For a centrally shared source, set `mode: 'shared'` and provide a dynamic `search()` implementation. Optional `browse()` and `list()` methods support paged inspection. A shared provider may expose `submitImprovement()` to accept evidence-backed proposals through `elf.submitKnowledgeImprovement()`; gate that path with `policy.authorizeKnowledgeImprovement`. Proposals never imply direct overwrite permission, and the host remains responsible for review, conflict handling, persistence, and version publication.
 
 ## 10. Publish versioned workflow presets
 
