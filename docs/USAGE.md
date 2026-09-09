@@ -72,27 +72,7 @@ await pending
 
 Forward the same signal through host browser adapters, model gateways, plugins, and custom policy hooks where supported.
 
-## 4. Handle explicit confirmation
-
-```js
-try {
-  return await elf.run(text, context, { signal })
-} catch (error) {
-  if (error?.code !== 'ELF_CONFIRMATION_REQUIRED') throw error
-
-  const confirmed = await showConfirmationDialog(error)
-  if (!confirmed) return null
-
-  return elf.run(text, context, {
-    signal,
-    confirmed: true,
-  })
-}
-```
-
-Confirmation is task-specific and must come from a current, explicit user action.
-
-## 5. Consume events
+## 4. Consume events
 
 Register a global handler during creation and an optional task-local handler during `run()`:
 

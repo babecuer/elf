@@ -69,7 +69,6 @@ export type ElfPolicy = {
   maxSteps?: number
   maxToolCalls?: number
   taskTimeoutMs?: number
-  confirmationRisks?: Array<'low' | 'medium' | 'high' | 'critical'>
   authorizeTask?(input: Record<string, unknown>): Promise<boolean | void> | boolean | void
   beforeAction?(input: Record<string, unknown>): Promise<boolean | void> | boolean | void
   validateResult?(input: Record<string, unknown>): Promise<boolean | GenieValidation | void> | boolean | GenieValidation | void
@@ -226,6 +225,55 @@ export type ElfMemory = {
   metadata?: Record<string, unknown>
 }
 
+export type ElfFormalMemoryKind = 'preference' | 'goal' | 'decision' | 'entity' | 'commitment' | 'constraint'
+export type ElfFormalMemoryStatus = 'candidate' | 'active' | 'superseded' | 'expired' | 'forgotten' | 'rejected'
+export type ElfFormalMemoryOrigin = 'user-explicit' | 'user-derived' | 'host-verified' | 'external' | 'system'
+export type ElfMemoryEvidenceRef = { type: string; id: string; observedAt?: string }
+export type ElfFormalMemory = {
+  id?: string
+  kind: ElfFormalMemoryKind
+  statement: string
+  scope?: { app?: string; plugin?: string; user?: string; site?: string; origins?: string[]; pageTypes?: string[]; [key: string]: unknown }
+  origin?: ElfFormalMemoryOrigin
+  evidenceRefs?: ElfMemoryEvidenceRef[]
+  confidence?: number
+  importance?: number
+  status?: ElfFormalMemoryStatus
+  supersessionKey?: string
+  supersedesId?: string
+  triggerTerms?: string[]
+  expiresAt?: string
+  recallCount?: number
+  lastConfirmedAt?: string
+  lastRecalledAt?: string
+  createdAt?: string
+  updatedAt?: string
+}
+export type ElfChatArchiveMessage = { id?: string; role?: 'user' | 'assistant' | 'system'; content: string; sessionId?: string; createdAt?: string; metadata?: Record<string, unknown> }
+export type ElfWorkLog = { id?: string; task: string; result?: string; status?: 'completed' | 'failed' | 'cancelled'; url?: string; metadata?: Record<string, unknown>; startedAt?: string; finishedAt?: string; createdAt?: string }
+export type ElfUserWorkflow = {
+  id?: string
+  name: string
+  description: string
+  enabled?: boolean
+  origin?: 'manual' | 'preset'
+  presetSourceId?: string
+  presetWorkflowId?: string
+  presetVersion?: string
+  deleted?: boolean
+  presetAvailable?: boolean
+  modified?: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+export type ElfPresetWorkflowSource = {
+  schemaVersion?: 1
+  id: string
+  version: string
+  workflows: ReadonlyArray<{ id: string; name: string; description: string; enabled?: boolean }>
+}
+export type ElfPage<T> = { items: T[]; total: number; offset: number; limit: number; hasMore: boolean }
+
 export type ElfBrowser = {
   observe(input: Record<string, unknown>): Promise<unknown>
   act(input: Record<string, unknown>): Promise<unknown>
@@ -249,9 +297,8 @@ export type ElfUiSurface = {
   quickPrompts?: ReadonlyArray<string | { label: string; text: string }>
 }
 
-export type ElfOptions = {
-  model: BrowserGenieModel | (() => BrowserGenieModel) | { generate(params: any): Promise<any> }
-  agentHarness?: {
+export type ElfAgentRuntime = {
+    baseName?: string | (() => string)
     run(input: {
       systemPrompt: string
       prompt: string
@@ -261,7 +308,11 @@ export type ElfOptions = {
       onDelta?(delta: string, detail?: { streamId?: string; turn?: number; step?: number; index?: number }): void
     }): Promise<{ finalResponse?: string; text?: string; events?: unknown[] }>
     close?(): Promise<void> | void
-  }
+}
+
+export type ElfOptions = {
+  model: BrowserGenieModel | (() => BrowserGenieModel) | { generate(params: any): Promise<any> }
+  agentRuntime?: ElfAgentRuntime
   profile: ElfProfile
   hostContext?: ElfHostContext
   hostRules?: ReadonlyArray<ElfHostRule>
@@ -286,7 +337,7 @@ export type ElfDataTable = { id: string; title: string; fields: ElfDataField[]; 
 export type ElfDataPage = { table: ElfDataTable | null; rows: Array<Record<string, unknown>>; total: number; offset: number; limit: number; hasMore: boolean }
 
 export function createElf(options: ElfOptions): {
-  run(text: string, context?: Record<string, unknown>, options?: { signal?: AbortSignal; fallbackOnSkillError?: boolean; confirmed?: boolean; onEvent?: (event: Record<string, unknown>) => void }): Promise<Record<string, unknown>>
+  run(text: string, context?: Record<string, unknown>, options?: { signal?: AbortSignal; fallbackOnSkillError?: boolean; onEvent?: (event: Record<string, unknown>) => void }): Promise<Record<string, unknown>>
   browser: ElfBrowser
   profile: ElfProfile
   hostContext: { businessDescription: string; scenarios: Array<{ id: string; title: string; description: string; origins: string[]; pageTypes: string[]; instructions: string[] }>; specialInstructions: string[] }
@@ -309,11 +360,29 @@ export function createElf(options: ElfOptions): {
   listMemories(options?: { kind?: 'chat' | 'work'; dateKey?: string; limit?: number }): Array<Record<string, unknown>>
   browseMemories(options?: { kind?: 'chat' | 'work'; dateKey?: string; offset?: number; limit?: number }): { items: Array<Record<string, unknown>>; total: number; offset: number; limit: number; hasMore: boolean }
   searchMemories(query: string, options?: { kind?: 'chat' | 'work'; limit?: number }): Promise<Array<Record<string, unknown>>>
+  archiveChatMessage(input: ElfChatArchiveMessage): Promise<ElfChatArchiveMessage & { id: string }>
+  browseChatArchive(options?: { offset?: number; limit?: number }): ElfPage<ElfChatArchiveMessage & { id: string }>
+  appendWorkLog(input: ElfWorkLog): Promise<ElfWorkLog & { id: string }>
+  browseWorkLogs(options?: { status?: 'completed' | 'failed' | 'cancelled'; offset?: number; limit?: number }): ElfPage<ElfWorkLog & { id: string }>
+  proposeMemory(input: ElfFormalMemory): Promise<ElfFormalMemory & { id: string }>
+  browseMemoryItems(options?: { query?: string; kind?: ElfFormalMemoryKind; status?: ElfFormalMemoryStatus; offset?: number; limit?: number }): ElfPage<ElfFormalMemory & { id: string }>
+  searchActiveMemories(query: string, context?: Record<string, unknown>, options?: { limit?: number }): Promise<Array<ElfFormalMemory & { id: string; matchScore?: number }>>
+  setMemoryStatus(id: string, status: ElfFormalMemoryStatus): Promise<(ElfFormalMemory & { id: string }) | null>
+  forgetMemory(id: string): Promise<boolean>
+  memoryStats(): { total: number; statuses: Record<string, number>; kinds?: Record<string, number> }
   saveAnalyzedTask(input: { id?: string; content: string; currentDate?: string; timeZone?: string; signal?: AbortSignal }): Promise<{ task: Record<string, unknown>; subtasks: Array<Record<string, unknown>>; removed: number; retained: number; unchanged: boolean }>
+  removeAnalyzedTask(taskId: string): Promise<{ taskRemoved: boolean; removed: number; retained: number }>
   saveWorkItem(input: { id?: string; kind: 'task' | 'schedule' | 'deliverable'; title: string; content?: string; status?: string; dateKey?: string; metadata?: Record<string, unknown> }): Promise<Record<string, unknown>>
   listWorkItems(options?: { kind?: 'task' | 'schedule' | 'deliverable'; dateKey?: string; limit?: number }): Array<Record<string, unknown>>
   browseWorkItems(options?: { kind?: 'task' | 'schedule' | 'deliverable'; parentId?: string; offset?: number; limit?: number }): { items: Array<Record<string, unknown>>; total: number; offset: number; limit: number; hasMore: boolean }
   removeWorkItem(id: string): Promise<boolean>
+  saveUserWorkflow(input: ElfUserWorkflow): Promise<ElfUserWorkflow & { id: string }>
+  syncPresetWorkflows(sources: ReadonlyArray<ElfPresetWorkflowSource>): Promise<Array<{ sourceId: string; version: string; count: number }>>
+  browseUserWorkflows(options?: { query?: string; enabled?: boolean; offset?: number; limit?: number }): ElfPage<ElfUserWorkflow & { id: string }>
+  matchUserWorkflows(query: string, context?: Record<string, unknown>, options?: { limit?: number }): Promise<Array<ElfUserWorkflow & { id: string; _match?: Record<string, unknown> }>>
+  removeUserWorkflow(id: string): Promise<boolean>
+  resetUserWorkflow(id: string): Promise<(ElfUserWorkflow & { id: string }) | null>
+  restoreUserWorkflow(id: string): Promise<(ElfUserWorkflow & { id: string }) | null>
   designDataTable(input: { purpose: string; id?: string; title?: string; sampleRows?: Array<Record<string, unknown>>; signal?: AbortSignal }): Promise<ElfDataTable>
   collectData(input: { purpose: string; id?: string; title?: string; sampleRows?: Array<Record<string, unknown>>; maxRows?: number; signal?: AbortSignal }, context: { currentUrl: string; allowedOrigins?: string[]; allowedResourceDomains?: string[]; extensionId?: string; targetId?: string }): Promise<{ table: ElfDataTable; changed: number; extracted: number }>
   createDataTable(input: { id: string; title: string; fields: ElfDataField[] }): Promise<ElfDataTable>
@@ -365,10 +434,29 @@ export function createInMemorySkillStore(initialSkills?: Array<Record<string, un
   listMemories(options?: { kind?: 'chat' | 'work'; dateKey?: string; limit?: number }): Array<Record<string, unknown>>
   browseMemories(options?: { kind?: 'chat' | 'work'; dateKey?: string; offset?: number; limit?: number }): { items: Array<Record<string, unknown>>; total: number; offset: number; limit: number; hasMore: boolean }
   searchMemories(input: { query: string; kind?: 'chat' | 'work'; limit?: number }): Promise<Array<Record<string, unknown>>>
+  saveChatArchive(input: ElfChatArchiveMessage & { id: string }): Promise<ElfChatArchiveMessage & { id: string }>
+  browseChatArchive(input?: { offset?: number; limit?: number }): ElfPage<ElfChatArchiveMessage & { id: string }>
+  deleteChatArchive(id: string): Promise<boolean>
+  saveWorkLog(input: ElfWorkLog & { id: string }): Promise<ElfWorkLog & { id: string }>
+  browseWorkLogs(input?: { status?: 'completed' | 'failed' | 'cancelled'; offset?: number; limit?: number }): ElfPage<ElfWorkLog & { id: string }>
+  deleteWorkLog(id: string): Promise<boolean>
+  saveMemoryItem(input: ElfFormalMemory & { id: string }): Promise<ElfFormalMemory & { id: string }>
+  browseMemoryItems(input?: { query?: string; kind?: ElfFormalMemoryKind; status?: ElfFormalMemoryStatus; offset?: number; limit?: number }): ElfPage<ElfFormalMemory & { id: string }>
+  searchActiveMemories(input?: { query?: string; context?: Record<string, unknown>; limit?: number }): Promise<Array<ElfFormalMemory & { id: string; matchScore?: number }>>
+  setMemoryStatus(id: string, status: ElfFormalMemoryStatus): Promise<(ElfFormalMemory & { id: string }) | null>
+  forgetMemory(id: string): Promise<boolean>
+  memoryStats(): { total: number; statuses: Record<string, number>; kinds?: Record<string, number> }
   saveWorkItem(input: Record<string, unknown>): Promise<Record<string, unknown>>
   listWorkItems(options?: { kind?: 'task' | 'schedule' | 'deliverable'; dateKey?: string; limit?: number }): Array<Record<string, unknown>>
   browseWorkItems(options?: { kind?: 'task' | 'schedule' | 'deliverable'; parentId?: string; offset?: number; limit?: number }): { items: Array<Record<string, unknown>>; total: number; offset: number; limit: number; hasMore: boolean }
   removeWorkItem(id: string): Promise<boolean>
+  saveUserWorkflow(input: ElfUserWorkflow & { id: string }): Promise<ElfUserWorkflow & { id: string }>
+  syncPresetWorkflows(source: ElfPresetWorkflowSource): Promise<{ sourceId: string; version: string; count: number }>
+  browseUserWorkflows(options?: { query?: string; enabled?: boolean; offset?: number; limit?: number }): ElfPage<ElfUserWorkflow & { id: string }>
+  matchUserWorkflows(input?: { query?: string; context?: Record<string, unknown>; limit?: number }): Promise<Array<ElfUserWorkflow & { id: string; _match?: Record<string, unknown> }>>
+  removeUserWorkflow(id: string): Promise<boolean>
+  resetUserWorkflow(id: string): Promise<(ElfUserWorkflow & { id: string }) | null>
+  restoreUserWorkflow(id: string): Promise<(ElfUserWorkflow & { id: string }) | null>
   createDataTable(input: { id: string; title: string; fields: ElfDataField[] }): Promise<ElfDataTable>
   listDataTables(): ElfDataTable[]
   upsertDataRows(tableId: string, rows: Array<Record<string, unknown>>): Promise<{ tableId: string; changed: number }>

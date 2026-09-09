@@ -28,7 +28,7 @@ The host application remains in control of the browser session, model credential
 Install a pinned public GitHub release:
 
 ```bash
-npm install github:babecuer/elf#v0.1.0
+npm install github:babecuer/elf#v0.1.1
 ```
 
 Install the Stagehand peer dependency when using the standard browser adapter:
@@ -128,7 +128,7 @@ Values such as `browserSession`, `applicationDataDirectory`, `currentUserId`, `b
 
 ## Security model
 
-ELF does not own browser windows, cookies, login state, model secrets, or business authorization. The trusted host must provide narrow capabilities and origin allowlists, enforce deterministic action gates where required, request explicit confirmation for high-risk operations, and pass the real current page URL for every task.
+ELF does not own browser windows, cookies, login state, model secrets, or business authorization. The trusted host must provide narrow capabilities and origin allowlists, enforce deterministic task and action authorization where required, and pass the real current page URL for every task. ELF does not add a risk-based second-confirmation flow.
 
 Page content, user-authored knowledge, and model output cannot grant new capabilities, expand allowed origins, lower risk levels, or bypass host policy.
 

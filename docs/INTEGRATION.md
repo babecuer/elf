@@ -22,7 +22,7 @@ The host must never derive capabilities, allowed origins, model secrets, or poli
 ## 2. Install dependencies
 
 ```bash
-npm install github:babecuer/elf#v0.1.0
+npm install github:babecuer/elf#v0.1.1
 npm install @browserbasehq/stagehand@^4.0.2
 ```
 
@@ -215,7 +215,35 @@ hostContext: {
 
 Use named `knowledgeSources` for larger collections of facts, procedures, glossaries, site maps, and reference material.
 
-## 9. Add host rules carefully
+## 9. Publish versioned workflow presets
+
+Keep host presets in a versioned JSON file that ships with the host plugin. The host does not need a workflow-management UI and must not write ELF's user database directly.
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "workspace-presets",
+  "version": "1.0.0",
+  "workflows": [
+    {
+      "id": "optimize-record",
+      "name": "Optimize record workflow",
+      "description": "Inspect the current record, compare strong peers, then update the current record.",
+      "enabled": true
+    }
+  ]
+}
+```
+
+Synchronize after creating the ELF instance and whenever the host opens it with a newly shipped bundle:
+
+```js
+await elf.syncPresetWorkflows([workflowBundle])
+```
+
+Keep the source and workflow IDs stable, and bump `version` for every content or membership change. ELF automatically updates untouched local copies while preserving user-edited copies. Preset workflows support `resetUserWorkflow()`, recoverable `removeUserWorkflow()`, and `restoreUserWorkflow()`. Manually created workflows are permanently removed and cannot be restored. A preset omitted from its current source version is hidden and excluded from matching.
+
+## 10. Add host rules carefully
 
 Host rules are trusted, host-owned behavioral constraints scoped to planning, execution, validation, or response:
 
@@ -232,7 +260,7 @@ hostRules: [
 
 Use deterministic `policy.beforeAction` and `policy.validateResult` gates for security-sensitive enforcement. Host rules guide model behavior; they do not replace code-level authorization.
 
-## 10. Configure policy
+## 11. Configure policy
 
 ```js
 policy: {
@@ -240,7 +268,6 @@ policy: {
   maxSteps: 8,
   maxToolCalls: 20,
   taskTimeoutMs: 120_000,
-  confirmationRisks: ['high', 'critical'],
   async beforeAction(input) {
     return authorizeBrowserAction(input)
   },
@@ -252,7 +279,7 @@ policy: {
 
 Resource domains passed at runtime allow images, scripts, fonts, and similar page assets. They do not expand top-level navigation origins.
 
-## 11. Run tasks
+## 12. Run tasks
 
 Always pass the real current page URL:
 
@@ -278,25 +305,6 @@ const result = await elf.run(
 
 Create a new Harness reasoning session for each new user task. Cross-task continuity should come from retrieved knowledge and memory rather than hidden reasoning state from an earlier task.
 
-## 12. Handle confirmation
-
-When a task requires explicit user confirmation, ELF throws an error with `code === 'ELF_CONFIRMATION_REQUIRED'`.
-
-```js
-try {
-  await elf.run(text, context, { signal })
-} catch (error) {
-  if (error?.code !== 'ELF_CONFIRMATION_REQUIRED') throw error
-
-  const confirmed = await showHostConfirmation(error)
-  if (confirmed) {
-    await elf.run(text, context, { signal, confirmed: true })
-  }
-}
-```
-
-`confirmed: true` must represent a fresh confirmation for that specific task. Never configure it as a permanent default.
-
 ## 13. Shutdown
 
 ```js
@@ -313,7 +321,6 @@ The host still owns its browser window, cookies, and credentials. `elf.close()` 
 - Provide only required capabilities.
 - Keep `allowedOrigins` narrow.
 - Enforce sensitive actions with code-level policy gates.
-- Require fresh confirmation for high-risk actions.
 - Pass the real current URL on every task.
 - Keep model credentials in host-controlled secret storage.
 - Use stable storage namespaces.
