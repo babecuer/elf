@@ -23,7 +23,7 @@ The host must never derive capabilities, allowed origins, model secrets, or poli
 ## 2. Install dependencies
 
 ```bash
-npm install github:babecuer/elf#v0.2.0
+npm install github:babecuer/elf#v0.2.1
 npm install @browserbasehq/stagehand@^4.0.2
 ```
 

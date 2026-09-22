@@ -1,9 +1,9 @@
 {
   "name": "@stagehand/elf",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Ready-to-use browser genie with host-provided model, browser, storage and policy.",
   "type": "module",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/babecuer/elf.git"

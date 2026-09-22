@@ -46,7 +46,7 @@ Domain-specific identifiers, field choices and outcome requirements remain in th
 Install a pinned public GitHub release:
 
 ```bash
-npm install github:babecuer/elf#v0.2.0
+npm install github:babecuer/elf#v0.2.1
 ```
 
 Install the Stagehand peer dependency when using the standard browser adapter:
@@ -163,3 +163,7 @@ Page content, user-authored knowledge, and model output cannot grant new capabil
 ## Distribution contents
 
 The public package contains bundled and minified runtime JavaScript, TypeScript declarations, and public documentation. It does not contain the original source tree, tests, internal design documents, build scripts, or source maps.
+
+## License
+
+The published package is licensed under the MIT License. You may use it in personal and commercial projects, and copy, modify, or redistribute the published package under the terms in [LICENSE](LICENSE). The original source tree is not part of the public package.
